@@ -1,0 +1,32 @@
+project:
+  type: default
+  output-dir: _output
+  execute-dir: file
+  render:
+    - "lectures/**/slides.qmd"
+
+format:
+  revealjs:
+    theme: [simple, shared/theme.scss]
+    width: 1280
+    height: 720
+    margin: 0.08
+    slide-number: c/t
+    transition: none
+    center: false
+    code-copy: true
+    code-line-numbers: true
+    navigation-mode: linear
+    embed-resources: true
+    html-math-method: mathjax
+
+execute:
+  echo: true
+  warning: false
+  message: false
+
+knitr:
+  opts_chunk:
+    fig.width: 9
+    fig.height: 4.3
+    dev: svg

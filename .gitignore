@@ -1,0 +1,19 @@
+# Quarto caches and generated presentations
+.quarto/
+_output/
+_archive/
+**/*_files/
+**/*.knit.md
+**/*.utf8.md
+
+# R session artifacts
+.Rhistory
+.RData
+.Ruserdata
+Rplots.pdf
+
+# macOS
+.DS_Store
+
+/.quarto/
+**/*.quarto_ipynb

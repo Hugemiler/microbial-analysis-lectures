@@ -1,0 +1,24 @@
+/*-- scss:defaults --*/
+$body-bg: #f9f8f4;
+$body-color: #24343b;
+$link-color: #007f82;
+$presentation-heading-color: #123b46;
+$font-family-sans-serif: 'Aptos', 'Helvetica Neue', sans-serif;
+$presentation-font-size-root: 30px;
+$presentation-h1-font-size: 2.3em;
+$presentation-h2-font-size: 1.5em;
+$code-block-font-size: 0.70em;
+
+/*-- scss:rules --*/
+.reveal h2 { margin-bottom: 0.65em; }
+.reveal p, .reveal li { line-height: 1.35; }
+.reveal strong { color: #007f82; }
+.reveal pre { box-shadow: none; }
+.reveal table { font-size: 0.85em; }
+.reveal .small { font-size: 0.76em; }
+.reveal .big { font-size: 1.3em; line-height: 1.45; }
+.reveal .subtitle { color: #007f82; }
+.reveal .matrix-slide table { font-size: 0.66em; width: 100%; }
+.reveal .matrix-slide table th,
+.reveal .matrix-slide table td { padding: 0.18em 0.3em; white-space: nowrap; }
+.reveal .matrix-slide p { font-size: 0.85em; }

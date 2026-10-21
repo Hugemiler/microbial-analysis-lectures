@@ -1,0 +1,30 @@
+---
+title: "Lecture title"
+subtitle: "Lecture subtitle"
+author: "Microbiome analysis"
+---
+
+```{r}
+#| label: setup
+#| include: false
+source("R/setup.R")
+```
+
+## The ecological question
+
+What do we want to understand about microbial communities?
+
+::: {.notes}
+Add teaching notes here.
+:::
+
+## A worked example
+
+```{r}
+values <- c(2, 4, 6)
+mean(values)
+```
+
+## Discussion
+
+What does this example help us interpret?

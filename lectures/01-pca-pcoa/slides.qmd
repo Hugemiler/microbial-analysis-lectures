@@ -1,0 +1,1020 @@
+---
+title: "PCA and PCoA"
+subtitle: "Representing microbial communities"
+author: "Microbiome analysis"
+---
+
+```{r}
+#| label: setup
+#| include: false
+source("R/setup.R")
+```
+
+## Population-level ecological dynamics
+
+::: {.big}
+We want a representation of microbial communities that helps us appreciate population-level ecological dynamics.
+:::
+
+Where do communities differ? How do they change through time? Do populations follow similar trajectories?
+
+::: {.notes}
+Begin with the biological purpose. A point will represent a sampled community. A population-level pattern requires multiple samples and suitable metadata. Ask what kinds of community change the audience wants to see. Ordination can display associations and trajectories, but cannot establish their causes.
+:::
+
+## How should we represent those relationships?
+
+**One possibility** is to represent each community directly by its microbial abundances, then find directions that capture the largest variation in those values.
+
+. . .
+
+**Another** is to first define what it means for two communities to be ecologically different, then construct a representation from those differences.
+
+::: {.notes}
+These are the two routes into the lecture. The first leads to PCA, the second to PCoA. Avoid presenting one as universally superior. The transformation and the dissimilarity determine which biological differences receive emphasis.
+:::
+
+## Ten infants at three months {.small}
+
+```{r}
+#| echo: false
+knitr::kable(X)
+```
+
+Each row represents a stool sample from a different infant at three months of age. Each column is a taxon.
+
+S1–S3 favor *B. longum*, S4–S6 favor *B. breve*. S7–S8 favor enterobacteria. *L. reuteri* remains scarce.
+
+::: {.notes}
+Synthetic stool communities from ten different infants, all sampled at three months of age. This is a cross-sectional example, not a longitudinal series. Values are percentages within the six selected taxa, not the entire microbiome. Each row totals 100. B. longum and B. breve never co-occur by construction. This is a teaching assumption, not evidence of competitive exclusion or a universal species rule. Zeros denote modeled absence or nondetection. Bifidobacteria dominate six samples, E. coli or K. pneumoniae dominate two, and Veillonella is enriched in two. L. reuteri stays at 0–1%. Exact values are illustrative rather than fitted to a cohort. No health status, feeding mode, treatment, or experimental groups are assigned. Sample IDs do not encode a time sequence. Ecological context: https://pmc.ncbi.nlm.nih.gov/articles/PMC10827747/ and https://pmc.ncbi.nlm.nih.gov/articles/PMC10689826/ . Reported exclusion can depend on B. longum subspecies, while B. longum subsp. longum can coexist with B. breve.
+:::
+
+## A community table in R {.small}
+
+```{r}
+X <- rbind(
+  S1  = c(78,  0, 12,  2,  7.8, 0.2),
+  S2  = c(65,  0, 18,  5, 11.5, 0.5),
+  S3  = c(86,  0,  5,  1,  8.0, 0.0),
+  S4  = c( 0, 82,  8,  2,  7.7, 0.3),
+  S5  = c( 0, 68, 15,  4, 12.0, 1.0),
+  S6  = c( 0, 75, 10,  1, 13.4, 0.6),
+  S7  = c( 4,  0, 62, 25,  9.0, 0.0),
+  S8  = c( 0,  3, 28, 61,  7.9, 0.1),
+  S9  = c(25,  0, 18,  7, 49.5, 0.5),
+  S10 = c( 0, 30, 22,  8, 39.8, 0.2))
+colnames(X) <- c("B. longum", "B. breve", "E. coli",
+                 "K. pneumoniae", "V. parvula", "L. reuteri")
+```
+
+Percentages within these six taxa. *B. longum* and *B. breve* are mutually exclusive by design.
+
+## PCA asks about variation in the community table
+
+Each taxon is a coordinate. Each community is a point in six dimensions.
+
+PCA finds a new set of perpendicular directions through this cloud.
+
+The first direction captures the greatest spread. Later directions capture the remaining spread.
+
+::: {.notes}
+We keep abundance percentages in their original units. Standardizing every taxon to unit variance would give a different geometry and more weight to the scarce L. reuteri column. These are proportions within a selected subcommunity, so the constant row sum also creates linear dependence.
+:::
+
+## PCA step 1: subtract the average community
+
+```{r}
+taxon_means <- colMeans(X)
+Y <- sweep(X, 2, taxon_means, FUN = "-")
+```
+
+Positive values mean **more than the average** for that taxon. Negative values mean **less**.
+
+This shifts the origin without changing differences between samples.
+
+## The centered table $Y$ {.matrix-slide}
+
+```{r}
+#| echo: false
+matrix_table(Y, 1)
+```
+
+All 10 communities remain. The mean of every column is zero.
+
+::: {.notes}
+Ask students to follow B. longum across S1 and S4. Negative entries are deviations from a mean, not negative microbial abundances. Tables round values for display only. All calculations use full precision.
+:::
+
+## PCA step 2: decompose the centered table
+
+```{r}
+s <- svd(Y)
+U <- s$u
+Sigma <- diag(s$d)
+V <- s$v
+```
+
+$$\underbrace{Y}_{10\times6}=
+\underbrace{U}_{10\times6}
+\underbrace{\Sigma}_{6\times6}
+\underbrace{V^\mathsf{T}}_{6\times6}$$
+
+**$U$:** sample patterns. **$\Sigma$:** their scales. **$V$:** taxon directions.
+
+::: {.notes}
+This is the thin SVD, sufficient to reconstruct the full 10 by 6 centered matrix. svd is the numerical linear algebra primitive. We expose its inputs and outputs rather than deriving an iterative SVD algorithm. V has orthonormal columns. Singular values are nonnegative and ordered. The constant row sum makes at least one singular value zero up to numerical precision.
+:::
+
+## SVD output: sample patterns $U$ {.matrix-slide}
+
+```{r}
+#| echo: false
+rownames(U) <- rownames(X)
+colnames(U) <- paste0("Axis ", seq_len(ncol(U)))
+matrix_table(U, 3)
+```
+
+Each column is a sample pattern with unit length. Its scale comes next.
+
+## SVD output: scales $\Sigma$ {.matrix-slide}
+
+```{r}
+#| echo: false
+dimnames(Sigma) <- list(colnames(U), colnames(U))
+matrix_table(Sigma, 2)
+```
+
+Larger singular values give stronger sample variation. The last is effectively zero.
+
+::: {.notes}
+Only the diagonal contains nonzero values. Axis importance in PCA depends on squared singular values, not their unsquared values. The last singular value is zero because each row of X sums to 100 and each row of Y sums to zero.
+:::
+
+## SVD output: taxon directions $V$ {.matrix-slide}
+
+```{r}
+#| echo: false
+rownames(V) <- colnames(X)
+colnames(V) <- colnames(U)
+matrix_table(V, 3)
+```
+
+Within each column, opposite signs describe an abundance contrast.
+
+::: {.notes}
+Read the first two columns in relation to the synthetic community patterns. Signs are relative: flipping a direction and its sample scores leaves the geometry unchanged. A loading is a coefficient in a direction, not a causal effect. The final zero-variance direction has no sample spread, so avoid interpreting it biologically.
+:::
+
+## The decomposition reconstructs the original table
+
+```{r}
+Y_rebuilt <- U %*% Sigma %*% t(V)
+max(abs(Y - Y_rebuilt))
+```
+
+The discrepancy is numerical rounding error.
+
+We have reorganized the complete table. We have **not yet reduced its dimensions**.
+
+## PCA step 3: turn patterns into sample coordinates
+
+```{r}
+scores <- U %*% Sigma
+rownames(scores) <- rownames(X)
+colnames(scores) <- paste0("PC", seq_len(ncol(scores)))
+```
+
+Equivalently, `Y %*% V` projects each community onto the taxon directions.
+
+Keeping PC1 and PC2 is the dimension-reduction step.
+
+## One community's first PCA coordinate
+
+```{r}
+sum(Y["S1", ] * V[, 1])
+U["S1", 1] * Sigma[1, 1]
+```
+
+Both give **`r round(scores["S1", 1], 2)`**.
+
+The first calculation weights S1's taxon deviations by the first loading vector. The second scales its first sample pattern.
+
+## All sample scores {.matrix-slide}
+
+```{r}
+#| echo: false
+matrix_table(scores, 2)
+```
+
+Each row now supplies coordinates for one community. The plot will use its first two entries.
+
+## How much variation do two axes retain?
+
+```{r}
+variance <- s$d^2 / (nrow(X) - 1)
+percent <- 100 * variance / sum(variance)
+knitr::kable(data.frame(PC = seq_along(percent),
+  Variance = round(variance, 2), Percent = round(percent, 2)))
+```
+
+PC1 and PC2 together retain **`r round(sum(percent[1:2]), 1)`%** of the variation.
+
+## PCA also works through the covariance matrix
+
+The centered table tells us how each taxon deviates from its average.
+
+Its **variance–covariance matrix** summarizes which taxa vary together:
+
+$$C=\frac{Y^\mathsf{T}Y}{n-1}.$$
+
+The diagonal contains taxon variances. Off-diagonal entries contain covariances.
+
+::: {.notes}
+We use sample covariance with denominator n minus one. All columns share percentage-point units. Positive covariance means matching deviations, negative covariance means opposing deviations. Composition and imposed exclusion can produce these patterns, so covariance alone does not identify ecological interactions.
+:::
+
+## PCA through covariance: step 1
+
+```{r}
+C <- t(Y) %*% Y / (nrow(Y) - 1)
+```
+
+Multiplying `t(Y)` by `Y` sums products of taxon deviations across all ten samples.
+
+The result is **6 × 6**, with taxa in both dimensions.
+
+## The full variance–covariance matrix {.matrix-slide}
+
+```{r}
+#| echo: false
+matrix_table(C, 2)
+```
+
+Which taxa vary in opposite directions across these communities?
+
+::: {.notes}
+Point to B. longum and B. breve and recall their imposed exclusion. Negative covariance alone cannot demonstrate competition. Entries have squared percentage-point units. This is covariance, not correlation: we have not standardized columns to unit variance.
+:::
+
+## PCA through covariance: step 2
+
+```{r}
+e_C <- eigen(C, symmetric = TRUE)
+V_C <- e_C$vectors
+theta <- e_C$values
+```
+
+$$C=V_C\Theta V_C^\mathsf{T}$$
+
+Eigenvectors give **taxon directions**. Eigenvalues give the **variance along each direction**.
+
+::: {.notes}
+An eigenvector v satisfies C v equals theta v. A matrix acting on its eigenvector changes its scale while preserving its direction. C is real symmetric and positive semidefinite. Roundoff can yield a tiny negative value for a theoretically zero eigenvalue. This introduces eigenanalysis before PCoA uses it.
+:::
+
+## Covariance eigenvectors recover SVD loadings {.matrix-slide}
+
+```{r}
+#| echo: false
+# Align arbitrary signs for comparison with the earlier V table.
+sign_C <- sign(colSums(V * V_C))
+sign_C[sign_C == 0] <- 1
+V_C <- sweep(V_C, 2, sign_C, FUN = "*")
+dimnames(V_C) <- dimnames(V)
+matrix_table(V_C, 3)
+```
+
+These are the same taxon directions as $V$ from SVD, up to arbitrary signs.
+
+::: {.notes}
+Compare with the earlier full V table. Sign alignment serves display only. Repeated eigenvalues permit different orthonormal bases within their eigenspaces, so signs alone do not always align outputs. This example has distinct nonzero eigenvalues. Its final direction has effectively zero variance.
+:::
+
+## Why the two PCA calculations agree
+
+Substituting $Y=U\Sigma V^\mathsf{T}$ gives
+
+$$C=\frac{Y^\mathsf{T}Y}{n-1}
+=V\frac{\Sigma^2}{n-1}V^\mathsf{T}.$$
+
+The covariance eigenvectors are the **SVD loadings** $V$.
+
+The covariance eigenvalues are **$\sigma_j^2/(n-1)$**.
+
+::: {.notes}
+The algebra uses U transpose U equals the identity for the thin SVD. Emphasize the shared directions and scaling relationship rather than requiring students to derive the identity. SVD avoids explicitly forming the covariance matrix and is generally preferable numerically.
+:::
+
+## The two sets of PCA variances {.matrix-slide}
+
+```{r}
+#| echo: false
+knitr::kable(data.frame(Axis = seq_along(theta),
+  From_SVD = round(s$d^2 / (nrow(Y) - 1), 5),
+  From_covariance = round(theta, 5)))
+```
+
+These are variances along the axes, before conversion to percentages.
+
+## PCA through covariance: step 3
+
+```{r}
+scores_C <- Y %*% V_C
+max(abs(scores_C - scores))
+```
+
+Projecting the centered communities onto the same taxon directions recovers the same sample scores.
+
+**SVD and covariance eigendecomposition are two routes to PCA.**
+
+::: {.notes}
+We compare sign-aligned eigenvectors. Scores are Y V, not eigenvectors alone. Multiplying covariance eigenvectors by square roots of eigenvalues does not produce sample coordinates: their rows index features. Numerical verification appears in the hidden chunk that follows.
+:::
+
+```{r}
+#| include: false
+stopifnot(max(abs(C - V_C %*% diag(theta) %*% t(V_C))) < 1e-8,
+          max(abs(theta - s$d^2 / (nrow(Y) - 1))) < 1e-8,
+          max(abs(scores_C - scores)) < 1e-8)
+```
+
+## The PCA representation
+
+```{r}
+#| echo: false
+ordination_plot(scores,
+  sprintf("PC1 (%.1f%%)", percent[1]),
+  sprintf("PC2 (%.1f%%)", percent[2]))
+```
+
+::: {.notes}
+All ten infants appear. The axis directions are arbitrary in sign. Look at the loadings when interpreting the major contrasts. The example imposes ecological structure, so this is an illustration rather than a discovery from an empirical cohort.
+:::
+
+## The geometry of the community table
+
+A community is a point with six coordinates, one abundance per taxon.
+
+Using ordinary lengths and perpendicular axes gives **Euclidean geometry**:
+
+$$d_{ij}^2=\sum_{a=1}^{6}(x_{ia}-x_{ja})^2.$$
+
+PCA uses this geometry for the table we supply. Transforming or scaling taxa changes what these lengths mean.
+
+::: {.notes}
+Euclidean geometry is the standard dot product and its associated norm. A numeric table can support other choices of geometry, but ordinary PCA uses the Euclidean one. Relative abundances lie in a constrained subset of this space because they sum to a constant. PCA can operate there, while log ratios or other transformations can encode different scientific choices. PCA needs neither normality nor independent taxa to calculate these axes.
+:::
+
+## The average community is the centroid
+
+The column means define a point $\bar x$ in the same six-dimensional space.
+
+Centering gives each sample's displacement from that point:
+
+$$y_i=x_i-\bar x.$$
+
+Its squared Euclidean distance from the centroid is
+
+$$\|y_i\|^2=\sum_a(x_{ia}-\bar x_a)^2.$$
+
+::: {.notes}
+A displacement is a vector from the average community to a particular sample. Subtracting the centroid changes the origin, not pairwise distances. We will now connect this squared length to variance. Avoid saying that variance is itself a distance: it is an average of squared displacements.
+:::
+
+## One taxon's variance is squared displacement
+
+For *B. longum*, the usual sample variance is
+
+$$s_{\mathrm{longum}}^2=\frac{1}{n-1}
+\sum_{i=1}^{n}(x_{i,\mathrm{longum}}-\bar x_{\mathrm{longum}})^2.$$
+
+Each squared term is a **squared distance along one taxon axis**.
+
+Variance sums those squared displacements across samples and divides by $n-1$.
+
+::: {.notes}
+Variance has squared units, here squared percentage points. It is not a distance between two samples. The sum runs over samples, while the Euclidean squared norm of one community sums over taxa. Reordering those two sums produces the next identity.
+:::
+
+## Total variance is spread around the centroid
+
+Adding the variances of all six taxa gives
+
+$$\underbrace{\sum_a s_a^2}_{\text{total variance}}
+=\frac{1}{n-1}\sum_i\sum_a y_{ia}^2
+=\frac{1}{n-1}\underbrace{\sum_i\|y_i\|^2}_{\text{total squared Euclidean distance to the centroid}}.$$
+
+The same squared deviations describe both **variance** and **Euclidean spread**.
+
+::: {.notes}
+The denominator n minus one is the sample variance convention. Calling this an average informally requires care: the mean squared distance has denominator n, whereas this identity uses n minus one. Neither choice changes which direction maximizes variance. This is also trace(C), the sum of covariance eigenvalues.
+:::
+
+## The identity, using our communities
+
+```{r}
+total_variance <- sum(diag(C))
+squared_lengths <- rowSums(Y^2)
+spread <- sum(squared_lengths) / (nrow(Y) - 1)
+c(total_variance = total_variance,
+  squared_distance_sum_over_n_minus_1 = spread)
+```
+
+Both calculations give **`r round(total_variance, 2)`** squared percentage points.
+
+```{r}
+#| include: false
+stopifnot(abs(total_variance - spread) < 1e-8)
+```
+
+## A PC measures distance along a new direction
+
+For a unit direction $v$, each sample's signed projection is
+
+$$t_i=y_i^\mathsf{T}v.$$
+
+Its squared distance from the projected centroid is $t_i^2$.
+
+$$\operatorname{Var}(Yv)=\frac{1}{n-1}\sum_i t_i^2
+=v^\mathsf{T}Cv.$$
+
+**Maximizing variance chooses the direction with the greatest squared projected spread.**
+
+::: {.notes}
+The projected centroid is zero because Y is centered. The loading vector must have unit length, otherwise multiplying it by a constant could increase variance without changing direction. Scores are signed coordinates and can be negative, while squared distances are nonnegative. Covariance eigenanalysis finds the maximizing direction through this quadratic form.
+:::
+
+## Retained spread and reconstruction error
+
+Perpendicular projection gives a right-angle decomposition for every sample:
+
+$$\|y_i\|^2=
+\underbrace{\|\widehat y_i\|^2}_{\text{retained squared length}}
++\underbrace{\|y_i-\widehat y_i\|^2}_{\text{squared reconstruction error}}.$$
+
+The original total is fixed.
+
+Maximizing retained variance therefore minimizes total squared reconstruction error.
+
+::: {.notes}
+This is the Pythagorean theorem in the supplied feature space. For k dimensions, the projection is onto the span of k orthonormal loading vectors. The retained squared length equals the sum of squared scores on those axes. PCA chooses the subspace with greatest retained spread and least squared error. This explains why the variance objective is Euclidean.
+:::
+
+## The distance consequences
+
+Keeping all nonzero PCs preserves pairwise Euclidean distances.
+
+Keeping only two PCs generally shortens those distances, because the map omits perpendicular components.
+
+**PCA's optimality concerns squared reconstruction error.** It does not promise to reproduce every pairwise distance in two dimensions.
+
+::: {.notes}
+The full orthonormal change of coordinates preserves lengths. Orthogonal truncation cannot increase pairwise distances. This is a consequence of the geometry, not a separate assertion that PCA minimizes raw pairwise-distance stress. PCoA on the same Euclidean distances recovers this same geometry.
+:::
+
+## PCoA step 1: calculate every pairwise distance
+
+```{r}
+n <- nrow(X)
+D <- matrix(0, n, n, dimnames = list(rownames(X), rownames(X)))
+for (i in seq_len(n)) {
+  for (j in seq_len(n)) {
+    D[i, j] <- sqrt(sum((X[i, ] - X[j, ])^2))
+  }
+}
+```
+
+We begin with Euclidean distances so we can compare with PCA.
+
+::: {.notes}
+This explicit loop replaces dist for the main calculation. Each entry compares two complete six-taxon profiles. The diagonal is zero. The lower and upper triangles repeat the same comparisons. PCoA is also called classical multidimensional scaling.
+:::
+
+## All pairwise distances $D$ {.matrix-slide}
+
+```{r}
+#| echo: false
+matrix_table(D, 1)
+```
+
+Both dimensions identify samples. All 10 communities participate in every later calculation.
+
+## PCoA step 2: square each distance
+
+```{r}
+A <- D^2
+```
+
+`^2` squares each entry. It does not multiply the matrix by itself.
+
+The squared distances will let us recover centered inner products.
+
+## All squared distances $A$ {.matrix-slide}
+
+```{r}
+#| echo: false
+matrix_table(A, 0)
+```
+
+These are squared abundance-percentage differences summed across taxa.
+
+## PCoA step 3: double-center
+
+For each squared distance:
+
+1. Subtract its row mean.
+2. Subtract its column mean.
+3. Add the grand mean.
+4. Multiply by $-1/2$.
+
+$$b_{ij}=-\tfrac12(a_{ij}-\bar a_{i\cdot}-\bar a_{\cdot j}+\bar a_{\cdot\cdot})$$
+
+::: {.notes}
+The input is squared distance and the output is an inner product. For Euclidean distances, this recovers how centered community vectors align. It is not an ordinary correlation matrix or a feature covariance matrix.
+:::
+
+## Double-centering in R
+
+```{r}
+row_means <- rowMeans(A)
+column_means <- colMeans(A)
+grand_mean <- mean(A)
+row_centered <- sweep(A, 1, row_means, FUN = "-")
+double_centered <- sweep(row_centered, 2,
+                         column_means, FUN = "-") + grand_mean
+B <- -0.5 * double_centered
+```
+
+`sweep()` applies the same subtraction along a row or column.
+
+## The centering means {.matrix-slide}
+
+```{r}
+#| echo: false
+knitr::kable(data.frame(Sample = rownames(X),
+  Row_mean = round(row_means, 2),
+  Column_mean = round(column_means, 2)))
+```
+
+The grand mean is **`r round(grand_mean, 2)`**. Row and column means agree because $A$ is symmetric.
+
+## One entry, with the actual numbers
+
+For the comparison between S1 and S2:
+
+$$b_{12}=-\tfrac12\left(
+`r round(A[1,2], 2)` - `r round(row_means[1], 2)`
+- `r round(column_means[2], 2)` + `r round(grand_mean, 2)`
+\right)=`r round(B[1,2], 2)`.$$
+
+The same operation produces all 100 entries.
+
+::: {.notes}
+The displayed arithmetic rounds inputs to two decimals. The result comes from full precision, so the last displayed decimal can differ slightly if someone repeats the arithmetic using rounded numbers.
+:::
+
+## The centered inner-product matrix $B$ {.matrix-slide}
+
+```{r}
+#| echo: false
+matrix_table(B, 1)
+```
+
+Positive entries indicate alignment around the average community. Negative entries indicate opposing deviations.
+
+::: {.notes}
+Diagonal entries are squared distances of centered communities from the origin. This interpretation is exact for Euclidean input. Entries are unnormalized inner products, so their magnitudes also depend on vector lengths. They are not correlations.
+:::
+
+## PCoA step 4: eigendecompose $B$
+
+The same operation appeared in the covariance route to PCA.
+
+```{r}
+e <- eigen(B, symmetric = TRUE)
+Q <- e$vectors
+lambda <- e$values
+```
+
+$$\underbrace{B}_{10\times10}=
+\underbrace{Q}_{10\times10}
+\underbrace{\Lambda}_{10\times10}
+\underbrace{Q^\mathsf{T}}_{10\times10}$$
+
+$C$ described relationships among **taxa**. Here $B$ describes relationships among **samples**.
+
+$Q$ contains sample patterns. The diagonal of $\Lambda$ gives their eigenvalues.
+
+## What does an eigenvector mean here?
+
+$$Bq=\lambda q$$
+
+Applying $B$ to this pattern changes its scale, while preserving its direction.
+
+In PCA’s covariance matrix, eigenvector entries belonged to **taxa**.
+
+Here each entry belongs to a **sample**. PCoA scales that pattern by $\sqrt{\lambda}$ to get coordinates.
+
+::: {.notes}
+B is real symmetric and therefore has an orthonormal eigenbasis. This differs from the PCA loading vectors, whose entries belong to taxa. We teach the role of the decomposition without solving a degree-ten characteristic polynomial.
+:::
+
+## All eigenvectors $Q$ {.matrix-slide}
+
+```{r}
+#| echo: false
+rownames(Q) <- rownames(X)
+colnames(Q) <- paste0("q", seq_len(ncol(Q)))
+matrix_table(Q, 3)
+```
+
+Only directions with positive, non-negligible eigenvalues supply real coordinate scales.
+
+::: {.notes}
+Vectors associated with numerical zero are not biologically interpretable axes. Their exact basis can change between numerical implementations. Show the full matrix for transparency, but focus discussion on q1 and q2.
+:::
+
+## All eigenvalues {.matrix-slide}
+
+```{r}
+#| echo: false
+knitr::kable(data.frame(Axis = seq_along(lambda),
+  Eigenvalue = formatC(lambda, format = "g", digits = 5)))
+```
+
+$\Lambda$ is diagonal, with these values on its diagonal and zeros elsewhere.
+
+Near-zero values here represent numerical precision and redundant dimensions.
+
+## PCoA step 5: calculate sample coordinates
+
+```{r}
+tol <- max(abs(lambda)) * 1e-10
+positive <- which(lambda > tol)
+Z_all <- sweep(Q[, positive, drop = FALSE], 2,
+               sqrt(lambda[positive]), FUN = "*")
+Z <- Z_all[, 1:2, drop = FALSE]
+```
+
+Each column is an eigenvector multiplied by the square root of its eigenvalue.
+
+We keep the first two columns for the plot.
+
+## One community's first PCoA coordinate
+
+```{r}
+Q["S1", 1]
+sqrt(lambda[1])
+Q["S1", 1] * sqrt(lambda[1])
+```
+
+S1's pattern entry times its axis scale gives **`r round(Z["S1", 1], 2)`**.
+
+This is the same scaling idea as $U\Sigma$ in PCA.
+
+## Coordinates for all ten communities {.matrix-slide}
+
+```{r}
+#| echo: false
+matrix_table(Z_all, 2)
+```
+
+Every row is a community. The first two entries locate it on the slide.
+
+## A check before reducing dimensions
+
+```{r}
+B_rebuilt <- Q %*% diag(lambda) %*% t(Q)
+max(abs(B - B_rebuilt))
+D_rebuilt <- as.matrix(dist(Z_all))
+max(abs(D - D_rebuilt))
+```
+
+For these Euclidean distances, all positive axes reconstruct the original geometry to numerical precision.
+
+::: {.notes}
+dist appears only as a check of our explicitly computed coordinates. The main distance construction uses the pairwise loop. Unlike the two-axis map, the full positive-coordinate representation preserves the original Euclidean distances.
+:::
+
+## The PCA–PCoA connection
+
+For Euclidean distances calculated from the same table,
+
+$$B=YY^\mathsf{T}=U\Sigma^2U^\mathsf{T}.$$
+
+The positive eigenvalues of $B$ equal the nonzero **squared singular values** of $Y$.
+
+PCA’s covariance eigenvalues divide those same values by $n-1$.
+
+Both calculations recover the same sample coordinates, allowing for signs or equivalent rotations.
+
+::: {.notes}
+B is a sample by sample Gram matrix, not the feature covariance matrix. Covariance eigenvalues instead divide the squared singular values by n minus one. Axis rotations are possible within repeated eigenspaces.
+:::
+
+## The numerical connection {.matrix-slide}
+
+```{r}
+#| echo: false
+knitr::kable(data.frame(Axis = seq_along(s$d),
+  Squared_singular_value = round(s$d^2, 5),
+  PCoA_eigenvalue = round(lambda[seq_along(s$d)], 5)))
+```
+
+```{r}
+max(abs(B - Y %*% t(Y)))
+```
+
+The same sample geometry emerges through two different workflows.
+
+## PCA and Euclidean PCoA coincide
+
+```{r}
+#| echo: false
+# Align arbitrary signs for direct visual comparison.
+alignment <- sign(colSums(scores[, 1:2] * Z))
+alignment[alignment == 0] <- 1
+aligned <- sweep(Z, 2, alignment, FUN = "*")
+par(mfrow = c(1, 2))
+ordination_plot(scores, "PC1", "PC2", main = "PCA via SVD")
+ordination_plot(aligned, "Coordinate 1", "Coordinate 2",
+                main = "PCoA via eigenanalysis")
+par(mfrow = c(1, 1))
+```
+
+::: {.notes}
+All points are coordinates from our direct calculations. The two-axis maps agree with each other, but omit the remaining axes. Numeric verification below is independent of axis signs.
+:::
+
+```{r}
+#| include: false
+stopifnot(max(abs(Y - Y_rebuilt)) < 1e-8,
+          max(abs(B - B_rebuilt)) < 1e-8,
+          max(abs(B - Y %*% t(Y))) < 1e-8,
+          max(abs(D - D_rebuilt)) < 1e-8,
+          max(abs(dist(scores[, 1:2]) - dist(Z))) < 1e-8)
+```
+
+## What should count as community change?
+
+**Euclidean distance** measures the straight-line separation of abundance vectors.
+
+**Bray–Curtis** measures the abundance mismatch relative to the combined abundance of the two communities.
+
+With proportions, Bray–Curtis asks: **what fraction of abundance does not overlap under the same taxon labels?**
+
+::: {.notes}
+The general Bray-Curtis formula is sum of absolute differences divided by sum of both samples' abundances. With proportions, this equals one minus shared minimum abundance. Both metrics use the same taxon table. The choice is which definition of difference answers the ecological question. Reference: https://vegandevs.github.io/vegan/reference/vegdist.html
+:::
+
+## Bray–Curtis measures abundance overlap
+
+For communities expressed as proportions,
+
+$$d^{BC}_{ij}=\frac12\sum_a|p_{ia}-p_{ja}|
+=1-\sum_a\min(p_{ia},p_{ja}).$$
+
+The minimum picks out the abundance **shared at each taxon**.
+
+A value of 0 means identical proportions. A value of 1 means no taxon overlap.
+
+::: {.notes}
+The identity assumes each nonempty sample is normalized to sum to one. Under that condition Bray-Curtis equals total variation distance. It can be read as the fraction of proportional abundance that would need reallocating among taxon labels to match the profiles. This is a mathematical comparison, not a claim about actual migration or replacement. For raw unequal-total counts, the overlap denominator changes. Reference: https://vegandevs.github.io/vegan/reference/vegdist.html
+:::
+
+## Abundance overlap in two of our communities {.matrix-slide}
+
+```{r}
+#| echo: false
+shared <- pmin(X["S1", ], X["S4", ])
+knitr::kable(data.frame(Taxon = colnames(X),
+  S1_percent = X["S1", ], S4_percent = X["S4", ],
+  Shared_percent = shared), row.names = FALSE)
+```
+
+Shared abundance totals **`r round(sum(shared), 1)`%**.
+
+Bray–Curtis is **`r round(1 - sum(shared) / 100, 3)`**: most abundance lies in different taxon columns.
+
+::: {.notes}
+The examples are S1 and S4, but the full PCoA calculation continues to use all ten samples. The imposed B. longum/B. breve exclusion creates low overlap even though both are bifidobacteria. Jointly absent taxa contribute nothing. These are proportions within our six selected taxa, not whole-microbiome estimates.
+:::
+
+## Squared changes or abundance mismatch?
+
+For the same proportional community profiles,
+
+$$d_E=\sqrt{\sum_a(p_{ia}-p_{ja})^2},\qquad
+ d_{BC}=\tfrac12\sum_a|p_{ia}-p_{ja}|.$$
+
+Euclidean distance squares each taxon's change before adding.
+
+Bray–Curtis adds absolute changes. A one-percentage-point change contributes the same amount regardless of which taxon changes.
+
+::: {.notes}
+The proportional-abundance form is important here. Squaring gives large individual differences more weight relative to smaller differences. Neither metric gives every taxon equal relative importance: changes in dominant taxa can be larger in absolute magnitude. Bray-Curtis is not automatically more sensitive to rare taxa. This contrast is L2 versus half L1 on proportions, not simply normalization versus no normalization.
+:::
+
+## The same amount of change, distributed differently {.matrix-slide}
+
+```{r}
+#| echo: false
+comparison <- rbind(
+  Baseline = c(50, 25, 15, 10, 0, 0),
+  Concentrated = c(30, 45, 15, 10, 0, 0),
+  Distributed = c(40, 15, 25, 20, 0, 0))
+colnames(comparison) <- colnames(X)
+matrix_table(comparison, 0)
+```
+
+Concentrated: 20 percentage points shift between two taxa.
+
+Distributed: two shifts of 10 points involve four taxa.
+
+Both profiles retain **80% abundance overlap** with the baseline.
+
+::: {.notes}
+This is a separate thought experiment using the same six feature labels. It does not replace our ten-infant matrix or impose its exclusion pattern. The changes are mathematical reallocations of relative abundance, not observed temporal trajectories. Concentrated differs by minus 20, plus 20, zero, zero. Distributed differs by minus 10, minus 10, plus 10, plus 10. Both have sum of absolute differences equal to 40 percentage points.
+:::
+
+## The two distances answer differently
+
+```{r}
+changes <- sweep(comparison[2:3, ], 2, comparison[1, ], "-")
+euclidean_example <- sqrt(rowSums(changes^2))
+bray_example <- rowSums(abs(changes)) / 200
+knitr::kable(data.frame(
+  Comparison = rownames(changes),
+  Euclidean_percent_points = round(euclidean_example, 2),
+  Bray_Curtis = bray_example), row.names = FALSE)
+```
+
+Bray–Curtis gives both **0.20**. Euclidean distance gives a larger separation to the concentrated change.
+
+::: {.notes}
+The common total of each row is 100, so the Bray-Curtis denominator is 200. Euclidean values are in percentage-point units, while Bray-Curtis is dimensionless: compare the ranking, not the raw scales between columns. On proportions the Euclidean values would be 0.2828 and 0.2, preserving the same ranking.
+:::
+
+## Why choose Bray–Curtis here?
+
+Our question is **how much of each community's abundance profile overlaps**, with mismatch contributing linearly.
+
+Bray–Curtis gives that interpretation directly: **0.20 means 80% shared abundance** when the samples are proportions.
+
+Euclidean distance fits a different aim: emphasizing large individual abundance changes through squared differences.
+
+::: {.notes}
+This is a scientific choice, not a claim that Bray-Curtis is universally better. Which weighting is useful depends on the ecological contrast. It remains abundance-based: a small absolute change in a rare taxon contributes little. Shared abundance is a comparison of relative profiles and not a shared number of cells.
+:::
+
+## Preprocessing still matters
+
+On counts, Euclidean distance changes if both communities' counts double. Bray–Curtis does not change under that common scaling.
+
+But Bray–Curtis on raw counts can still reflect **unequal sample totals**. Normalizing each sample to proportions addresses that difference in totals.
+
+Our rows already total 100. Here the contrast is the **weighting of abundance changes**, not a correction for unequal totals.
+
+::: {.notes}
+For example, count vectors x and 2x have identical proportions but nonzero Bray-Curtis of one third on raw counts. Common scaling of both vectors is different from scaling one independently. A sample with no observations cannot be normalized. Sequencing depth is not an estimate of total community biomass. No claim of a universal library-size correction follows from Bray-Curtis alone.
+:::
+
+```{r}
+#| include: false
+stopifnot(max(abs(bray_example - 0.2)) < 1e-12,
+          euclidean_example[1] > euclidean_example[2],
+          abs(1 - sum(shared)/100 -
+            sum(abs(X["S1", ] - X["S4", ])) /
+            sum(X["S1", ] + X["S4", ])) < 1e-12)
+```
+
+## The same communities, a different dissimilarity
+
+$$d^{BC}_{ij}=\frac{\sum_a|p_{ia}-p_{ja}|}{\sum_a(p_{ia}+p_{ja})}$$
+
+```{r}
+P <- X / rowSums(X)
+D_bc <- matrix(0, n, n, dimnames = dimnames(D))
+for (i in seq_len(n)) {
+  for (j in seq_len(n)) {
+    D_bc[i, j] <- sum(abs(P[i, ] - P[j, ])) /
+                  sum(P[i, ] + P[j, ])
+  }
+}
+```
+
+Here every difference measures taxon **proportions**.
+
+::: {.notes}
+Rows already total 100. Normalizing makes the proportion interpretation explicit. Bray-Curtis is unchanged by this common scaling. The formula is defined here because every sample is nonempty. Reference: https://vegandevs.github.io/vegan/reference/vegdist.html
+:::
+
+## All Bray–Curtis dissimilarities {.matrix-slide}
+
+```{r}
+#| echo: false
+matrix_table(D_bc, 3)
+```
+
+The input geometry changes. The PCoA operations stay the same.
+
+## The same PCoA steps, with Bray–Curtis
+
+```{r}
+A_bc <- D_bc^2
+B_bc <- sweep(A_bc, 1, rowMeans(A_bc), FUN = "-")
+B_bc <- sweep(B_bc, 2, colMeans(A_bc), FUN = "-")
+B_bc <- -0.5 * (B_bc + mean(A_bc))
+e_bc <- eigen(B_bc, symmetric = TRUE)
+Z_bc <- sweep(e_bc$vectors[, 1:2], 2,
+              sqrt(e_bc$values[1:2]), FUN = "*")
+rownames(Z_bc) <- rownames(X)
+```
+
+Square, double-center, eigendecompose, then scale the eigenvectors.
+
+## The Bray–Curtis eigenvalue spectrum {.matrix-slide}
+
+```{r}
+#| echo: false
+knitr::kable(data.frame(Axis = seq_along(e_bc$values),
+  Eigenvalue = formatC(e_bc$values, format = "g", digits = 5)))
+```
+
+Negative values are possible when the dissimilarities are not Euclidean.
+
+## Bray–Curtis PCoA
+
+```{r}
+#| echo: false
+ordination_plot(Z_bc, "PCoA 1", "PCoA 2")
+```
+
+The positions now reflect differences in taxon proportions measured by Bray–Curtis.
+
+::: {.notes}
+Do not compare numerical axis scales to the earlier Euclidean plot. This is a synthetic example with ten samples and six taxa. Inspect the eigenvalues on the preceding slide for negative components. Avoid a claim that one method reveals true clusters. No percentage labels appear here. For dissimilarities with negative eigenvalues, percentages require an explicit denominator convention.
+:::
+
+## Negative eigenvalues carry information
+
+A dissimilarity matrix may have no exact Euclidean representation.
+
+Its centered matrix $B$ can then have **negative eigenvalues**.
+
+Keeping positive axes approximates the geometry. Inspect the full spectrum and report any correction and the convention used for axis percentages.
+
+::: {.notes}
+Small negatives at floating point tolerance can be numerical artifacts. Material negatives indicate non-Euclidean structure. Cailliez and Lingoes corrections change the supplied dissimilarities. Classical scaling minimizes a Gram-matrix approximation criterion (strain), not general raw-distance stress. Reference: https://stat.ethz.ch/R-manual/R-devel/library/stats/html/cmdscale.html
+:::
+
+## Shared absences and the choice of distance
+
+Adding an all-zero taxon leaves both Euclidean and Bray–Curtis distances unchanged.
+
+The reason to choose Bray–Curtis here is its **abundance-overlap interpretation and linear weighting of mismatch**.
+
+Both methods depend on how we define and preprocess the abundance table.
+
+::: {.notes}
+Avoid the common claim that Euclidean distance adds a similarity bonus for joint absence. The absent feature contributes zero to both measures. Neither metric resolves compositional interpretation or sampling issues on its own.
+:::
+
+## Reading an ordination ecologically
+
+Nearby points represent communities that are similar **under the chosen representation**.
+
+Temporal trajectories require repeated samples and time labels. Group separation needs appropriate statistical assessment.
+
+A two-dimensional plot omits information. Axis signs have no inherent biological meaning.
+
+::: {.notes}
+Ask students what metadata they would add to distinguish subject variation from a temporal trend. A visual gap alone does not establish a treatment effect. Formal analysis must respect repeated measures and experimental design, and distinguish location from dispersion effects.
+:::
+
+## PCA and PCoA in one view
+
+| | PCA | PCoA |
+|:--|:--|:--|
+| Input | Sample × feature table | Sample × sample dissimilarities |
+| Preparation | Center, optionally scale | Square and double-center |
+| Calculation | SVD of $Y$, or eigenanalysis of $C$ | Eigenanalysis of $B$ |
+| Coordinates | $U_k\Sigma_k$ | $Q_k\Lambda_k^{1/2}$ |
+| Native feature loadings | Yes | No |
+
+**Euclidean PCoA and PCA agree when preprocessing matches.**
+
+## Discussion
+
+What ecological difference should count as a large difference between two communities?
+
+Would concentrated changes in a few taxa matter more to our ecological question than the same total mismatch spread across several taxa?
+
+How would we check whether a two-dimensional representation supports the interpretation we want to make?
+
+## References {.small}
+
+- [Infant Bifidobacterium colonization](https://pmc.ncbi.nlm.nih.gov/articles/PMC10827747/) and [community assembly](https://pmc.ncbi.nlm.nih.gov/articles/PMC10689826/)
+- [R: `prcomp`](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/prcomp.html) and [R: `cmdscale`](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/cmdscale.html)
+- [vegan: ecological dissimilarities](https://vegandevs.github.io/vegan/reference/vegdist.html)
+- [Quarto Reveal.js documentation](https://quarto.org/docs/presentations/revealjs/)
