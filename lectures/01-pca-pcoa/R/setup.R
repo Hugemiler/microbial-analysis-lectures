@@ -40,3 +40,159 @@ bray_curtis <- function(x) {
   }
   as.dist(d)
 }
+
+
+
+latex_matrix <- function(
+    x,
+    name = "X",
+    row_labels = rownames(x),
+    col_labels = colnames(x),
+    digits = NULL,
+    rotate_cols = TRUE,
+    col_spacing = "1em"
+) {
+  x <- as.matrix(x)
+  stopifnot(is.numeric(x))
+
+  if (!is.null(row_labels))
+    stopifnot(length(row_labels) == nrow(x))
+
+  if (!is.null(col_labels))
+    stopifnot(length(col_labels) == ncol(x))
+
+  # Escape common LaTeX special characters in labels
+  tex_label <- function(z) {
+    z <- as.character(z)
+    chars <- c(
+      "\\" = "\\textbackslash{}",
+      "_" = "\\_",
+      "%" = "\\%",
+      "&" = "\\&",
+      "#" = "\\#",
+      "$" = "\\$",
+      "{" = "\\{",
+      "}" = "\\}"
+    )
+    pattern <- "[\\\\_%&#${}]"
+    z <- gsub(
+      pattern,
+      function(m) chars[[m]],
+      z,
+      perl = TRUE
+    )
+    paste0("\\text{", z, "}")
+  }
+
+  # Format numeric entries
+  values <- if (is.null(digits)) {
+    matrix(as.character(x), nrow = nrow(x))
+  } else {
+    matrix(
+      formatC(as.vector(x), format = "f", digits = digits),
+      nrow = nrow(x)
+    )
+  }
+
+  # One shared array for column labels and numeric data
+  columns <- paste(rep("c", ncol(x)), collapse = paste0(
+    "@{\\hspace{", col_spacing, "}}"
+  ))
+
+  has_rows <- !is.null(row_labels)
+  has_cols <- !is.null(col_labels)
+
+  align <- paste0(
+    if (has_rows) "r@{\\quad}" else "",
+    columns
+  )
+
+  lines <- character()
+
+  if (has_cols) {
+    labels <- vapply(col_labels, function(z) {
+      label <- tex_label(z)
+      if (rotate_cols) {
+        paste0("\\rotatebox{90}{", label, "}")
+      } else {
+        label
+      }
+    }, character(1))
+
+    lines <- c(
+      lines,
+      paste0(
+        if (has_rows) " & " else "",
+        paste(labels, collapse = " & ")
+      ),
+      "\\\\[6pt]"
+    )
+  }
+
+  for (i in seq_len(nrow(x))) {
+    entries <- values[i, ]
+
+    if (has_rows) {
+      entries <- c(tex_label(row_labels[i]), entries)
+    }
+
+    lines <- c(lines, paste(entries, collapse = " & "))
+
+    if (i < nrow(x)) {
+      lines <- c(lines, "\\\\")
+    }
+  }
+
+  # Header stays outside brackets, data stays inside:
+  # use an outer array and \left[ ... \right] for the values.
+  # Both sections use identical column specifications.
+  header <- if (has_cols) {
+    paste0(
+      "\\begin{array}{", align, "}",
+      lines[1],
+      "\\end{array}"
+    )
+  } else NULL
+
+  data_rows <- vapply(seq_len(nrow(x)), function(i) {
+    vals <- values[i, ]
+    paste(vals, collapse = " & ")
+  }, character(1))
+
+  data_tex <- paste0(
+    "\\left[\\begin{array}{", columns, "}",
+    paste(data_rows, collapse = " \\\\\n"),
+    "\\end{array}\\right]"
+  )
+
+  # Row labels outside brackets
+  if (has_rows) {
+    row_tex <- paste0(
+      "\\begin{array}{r}",
+      paste(
+        vapply(row_labels, tex_label, character(1)),
+        collapse = " \\\\\n"
+      ),
+      "\\end{array}"
+    )
+    data_tex <- paste0(
+      "\\begin{array}{r@{\\quad}c}",
+      row_tex, " & ", data_tex,
+      "\\end{array}"
+    )
+  }
+
+  if (has_cols) {
+    # Use the same horizontal alignment structure for
+    # the labels and the underlying numeric values.
+    data_tex <- paste0(
+      "\\begin{array}{c}",
+      header, "\\\\[8pt]",
+      data_tex,
+      "\\end{array}"
+    )
+  }
+
+  cat("\n$$\n", name, " = ", data_tex, "\n$$\n\n", sep = "")
+  invisible(NULL)
+}

@@ -12,33 +12,55 @@ source("R/setup.R")
 
 ## Population-level ecological dynamics
 
+. . .
+
 ::: {.big}
-We want a representation of microbial communities that helps us appreciate population-level ecological dynamics.
+After we profile a set of metagenomes, we usually want to precede per-feature statistical analysis by some sort of **Exploratory data analysis.** 
 :::
 
-Where do communities differ? How do they change through time? Do populations follow similar trajectories?
+<br>
 
-::: {.notes}
+The objective here is to answer questions like
+_Where do communities differ? How do they change through `variable`? Do the populations follow certain structures?_
+
+<br>
+
+. . .
+
+In order to do that, we need two elements:
+
+1. A mathematical/computational representation of microbial communities that will allow us to
+   represent these relationships and helps us appreciate population-level ecological dynamics.
+2. A framework to turn these representations into something that allows the readout we want.
+
+<!-- ::: {.notes}
 Begin with the biological purpose. A point will represent a sampled community. A population-level pattern requires multiple samples and suitable metadata. Ask what kinds of community change the audience wants to see. Ordination can display associations and trajectories, but cannot establish their causes.
-:::
+::: -->
 
 ## How should we represent those relationships?
 
+. . .
+
+::: {.big}
 **One possibility** is to represent each community directly by its microbial abundances, then find directions that capture the largest variation in those values.
 
 . . .
 
 **Another** is to first define what it means for two communities to be ecologically different, then construct a representation from those differences.
-
-::: {.notes}
-These are the two routes into the lecture. The first leads to PCA, the second to PCoA. Avoid presenting one as universally superior. The transformation and the dissimilarity determine which biological differences receive emphasis.
 :::
+
+<!-- ::: {.notes}
+These are the two routes into the lecture. The first leads to PCA, the second to PCoA. Avoid presenting one as universally superior. The transformation and the dissimilarity determine which biological differences receive emphasis.
+::: -->
 
 ## Ten infants at three months {.small}
 
 ```{r}
 #| echo: false
+#| results: asis
 knitr::kable(X)
+# latex_matrix(X)
+# gt::gt(X)
 ```
 
 Each row represents a stool sample from a different infant at three months of age. Each column is a taxon.
